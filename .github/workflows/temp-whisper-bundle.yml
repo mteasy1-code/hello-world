@@ -1,4 +1,4 @@
-name: Temporary Whisper Bundle
+name: Temporary Whisper Static Tool
 
 on:
   push:
@@ -12,63 +12,34 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
-      - name: Build whisper.cpp
+      - name: Build static whisper.cpp CLI
         shell: bash
         run: |
           set -euo pipefail
           git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git
           cmake -S whisper.cpp -B whisper-build \
             -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DGGML_BUILD_SHARED_LIBS=OFF \
             -DWHISPER_BUILD_TESTS=OFF \
             -DWHISPER_BUILD_EXAMPLES=ON \
             -DWHISPER_BUILD_SERVER=OFF
           cmake --build whisper-build --config Release -j 2
-          mkdir -p tools model chunks
+          mkdir -p tools
           cp whisper-build/bin/whisper-cli tools/
           chmod +x tools/whisper-cli
-
-      - name: Download multilingual model and VAD model
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -L --fail --retry 5 --retry-delay 5 \
-            -o model/ggml-large-v3-turbo-q5_0.bin \
-            https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin
-          curl -L --fail --retry 5 --retry-delay 5 \
-            -o tools/ggml-silero-v6.2.0.bin \
-            https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v6.2.0.bin
-          sha256sum model/ggml-large-v3-turbo-q5_0.bin > tools/MODEL_SHA256.txt
-          sha256sum tools/whisper-cli tools/ggml-silero-v6.2.0.bin > tools/TOOLS_SHA256.txt
+          sha256sum tools/whisper-cli > tools/SHA256SUMS.txt
+          file tools/whisper-cli > tools/FILE.txt
           ldd tools/whisper-cli > tools/LDD.txt || true
-          split -b 280M model/ggml-large-v3-turbo-q5_0.bin chunks/model.part-
-          sha256sum chunks/model.part-* > tools/PARTS_SHA256.txt
-          ls -lh model tools chunks
+          ./tools/whisper-cli --help > tools/HELP.txt 2>&1 || true
 
-      - name: Upload tools
+      - name: Upload static CLI
         uses: actions/upload-artifact@v4
         with:
-          name: whisper-tools-and-vad
+          name: whisper-static-cli
           path: tools/
-          compression-level: 0
-          retention-days: 1
-          if-no-files-found: error
-
-      - name: Upload model part aa
-        uses: actions/upload-artifact@v4
-        with:
-          name: whisper-model-part-aa
-          path: chunks/model.part-aa
-          compression-level: 0
-          retention-days: 1
-          if-no-files-found: error
-
-      - name: Upload model part ab
-        uses: actions/upload-artifact@v4
-        with:
-          name: whisper-model-part-ab
-          path: chunks/model.part-ab
           compression-level: 0
           retention-days: 1
           if-no-files-found: error
