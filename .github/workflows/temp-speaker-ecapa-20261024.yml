@@ -38,3 +38,5 @@ jobs:
             ECAPA_SHA256SUMS.txt
           retention-days: 1
           compression-level: 0
+
+# trigger 2026-10-24
