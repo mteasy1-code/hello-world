@@ -25,30 +25,50 @@ jobs:
             -DWHISPER_BUILD_EXAMPLES=ON \
             -DWHISPER_BUILD_SERVER=OFF
           cmake --build whisper-build --config Release -j 2
-          mkdir -p bundle
-          cp whisper-build/bin/whisper-cli bundle/
-          cp whisper.cpp/models/download-vad-model.sh bundle/
-          chmod +x bundle/whisper-cli
+          mkdir -p tools model chunks
+          cp whisper-build/bin/whisper-cli tools/
+          chmod +x tools/whisper-cli
 
       - name: Download multilingual model and VAD model
         shell: bash
         run: |
           set -euo pipefail
           curl -L --fail --retry 5 --retry-delay 5 \
-            -o bundle/ggml-large-v3-turbo-q5_0.bin \
+            -o model/ggml-large-v3-turbo-q5_0.bin \
             https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin
           curl -L --fail --retry 5 --retry-delay 5 \
-            -o bundle/ggml-silero-v6.2.0.bin \
+            -o tools/ggml-silero-v6.2.0.bin \
             https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v6.2.0.bin
-          sha256sum bundle/* > bundle/SHA256SUMS.txt
-          ldd bundle/whisper-cli > bundle/LDD.txt || true
-          du -h bundle/*
+          sha256sum model/ggml-large-v3-turbo-q5_0.bin > tools/MODEL_SHA256.txt
+          sha256sum tools/whisper-cli tools/ggml-silero-v6.2.0.bin > tools/TOOLS_SHA256.txt
+          ldd tools/whisper-cli > tools/LDD.txt || true
+          split -b 280M model/ggml-large-v3-turbo-q5_0.bin chunks/model.part-
+          sha256sum chunks/model.part-* > tools/PARTS_SHA256.txt
+          ls -lh model tools chunks
 
-      - name: Upload bundle
+      - name: Upload tools
         uses: actions/upload-artifact@v4
         with:
-          name: whisper-linux-large-v3-turbo-q5
-          path: bundle/
+          name: whisper-tools-and-vad
+          path: tools/
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload model part aa
+        uses: actions/upload-artifact@v4
+        with:
+          name: whisper-model-part-aa
+          path: chunks/model.part-aa
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload model part ab
+        uses: actions/upload-artifact@v4
+        with:
+          name: whisper-model-part-ab
+          path: chunks/model.part-ab
           compression-level: 0
           retention-days: 1
           if-no-files-found: error
