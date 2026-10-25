@@ -1,0 +1,36 @@
+name: ELAN Whisper Tools
+on:
+  push:
+    paths:
+      - '.github/workflows/elan-whisper-tools.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Download whisper.cpp Linux binary
+        run: |
+          set -euxo pipefail
+          mkdir -p bundle/bin bundle/models
+          curl -L --retry 5 --fail -o /tmp/whisper-bin.tar.gz \
+            https://github.com/ggml-org/whisper.cpp/releases/download/v1.9.5/whisper-bin-ubuntu-x64.tar.gz
+          tar -xzf /tmp/whisper-bin.tar.gz -C bundle/bin
+      - name: Download multilingual small q5_1 model
+        run: |
+          set -euxo pipefail
+          curl -L --retry 5 --fail -o bundle/models/ggml-small-q5_1.bin \
+            https://github.com/w3xgroup/taskurio-models/releases/download/whisper-models-v1/ggml-small-q5_1.bin
+          echo 'ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb  bundle/models/ggml-small-q5_1.bin' | sha256sum -c -
+      - name: Inventory
+        run: |
+          find bundle -maxdepth 4 -type f -printf '%p\t%s bytes\n' | sort
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: elan-whisper-tools
+          path: bundle
+          compression-level: 0
+          retention-days: 1
