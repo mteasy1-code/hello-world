@@ -1,0 +1,33 @@
+name: ELAN ECAPA Speaker Tools
+on:
+  push:
+    paths:
+      - '.github/workflows/elan-ecapa-tools.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Download SpeechBrain ECAPA speaker model
+        run: |
+          set -euxo pipefail
+          python -m pip install --quiet huggingface_hub
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          snapshot_download(
+              repo_id='speechbrain/spkrec-ecapa-voxceleb',
+              local_dir='bundle/spkrec-ecapa-voxceleb',
+              local_dir_use_symlinks=False,
+          )
+          PY
+          find bundle -type f -printf '%p\t%s bytes\n' | sort
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: elan-ecapa-speaker-model
+          path: bundle
+          compression-level: 0
+          retention-days: 1
