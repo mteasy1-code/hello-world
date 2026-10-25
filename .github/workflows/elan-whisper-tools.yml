@@ -16,7 +16,7 @@ jobs:
           set -euxo pipefail
           mkdir -p bundle/bin bundle/models
           curl -L --retry 5 --fail -o /tmp/whisper-bin.tar.gz \
-            https://github.com/ggml-org/whisper.cpp/releases/download/v1.9.5/whisper-bin-ubuntu-x64.tar.gz
+            https://github.com/ggml-org/whisper.cpp/releases/download/b5454/whisper-bin-ubuntu-x64.tar.gz
           tar -xzf /tmp/whisper-bin.tar.gz -C bundle/bin
       - name: Download multilingual small q5_1 model
         run: |
@@ -26,7 +26,7 @@ jobs:
           echo 'ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb  bundle/models/ggml-small-q5_1.bin' | sha256sum -c -
       - name: Inventory
         run: |
-          find bundle -maxdepth 4 -type f -printf '%p\t%s bytes\n' | sort
+          find bundle -maxdepth 5 -type f -printf '%p\t%s bytes\n' | sort
       - name: Upload bundle
         uses: actions/upload-artifact@v4
         with:
