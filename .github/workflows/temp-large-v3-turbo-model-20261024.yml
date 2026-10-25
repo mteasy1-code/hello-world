@@ -1,0 +1,44 @@
+name: Temporary Faster Whisper Large V3 Turbo Model
+
+on:
+  push:
+    branches:
+      - temp-faster-whisper-20261024
+    paths:
+      - .github/workflows/temp-large-v3-turbo-model-20261024.yml
+
+permissions:
+  contents: read
+
+jobs:
+  download-model:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download CTranslate2 model snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet 'huggingface_hub>=0.25,<1'
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          snapshot_download(
+              repo_id='deepdml/faster-whisper-large-v3-turbo-ct2',
+              local_dir='model',
+              local_dir_use_symlinks=False,
+          )
+          PY
+          find model -type f -print0 | sort -z | xargs -0 sha256sum > MODEL_SHA256SUMS.txt
+          du -sh model
+      - uses: actions/upload-artifact@v4
+        with:
+          name: faster-whisper-large-v3-turbo-model
+          path: |
+            model/
+            MODEL_SHA256SUMS.txt
+          compression-level: 0
+          retention-days: 2
+          if-no-files-found: error
