@@ -1,0 +1,71 @@
+name: Temporary Faster Whisper Large V3 Turbo Split
+
+on:
+  push:
+    branches:
+      - temp-faster-whisper-20261024
+    paths:
+      - .github/workflows/temp-large-v3-turbo-split-20261024.yml
+
+permissions:
+  contents: read
+
+jobs:
+  split-model:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download and split model
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet 'huggingface_hub>=0.25,<1'
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          snapshot_download(repo_id='deepdml/faster-whisper-large-v3-turbo-ct2', local_dir='model', local_dir_use_symlinks=False)
+          PY
+          find model -type f -print0 | sort -z | xargs -0 sha256sum > MODEL_FILES_SHA256SUMS.txt
+          tar -cf model.tar model MODEL_FILES_SHA256SUMS.txt
+          sha256sum model.tar > MODEL_TAR_SHA256SUM.txt
+          split -b 400M -d -a 2 model.tar model.tar.part-
+          ls -lh model.tar.part-*
+          sha256sum model.tar.part-* > MODEL_PARTS_SHA256SUMS.txt
+          mkdir -p part00 part01 part02 part03 part04
+          cp model.tar.part-00 MODEL_PARTS_SHA256SUMS.txt MODEL_TAR_SHA256SUM.txt part00/
+          cp model.tar.part-01 part01/
+          cp model.tar.part-02 part02/
+          cp model.tar.part-03 part03/
+          if [ -f model.tar.part-04 ]; then cp model.tar.part-04 part04/; else echo no-part04 > part04/EMPTY.txt; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: large-v3-turbo-part00
+          path: part00/
+          compression-level: 0
+          retention-days: 2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: large-v3-turbo-part01
+          path: part01/
+          compression-level: 0
+          retention-days: 2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: large-v3-turbo-part02
+          path: part02/
+          compression-level: 0
+          retention-days: 2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: large-v3-turbo-part03
+          path: part03/
+          compression-level: 0
+          retention-days: 2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: large-v3-turbo-part04
+          path: part04/
+          compression-level: 0
+          retention-days: 2
