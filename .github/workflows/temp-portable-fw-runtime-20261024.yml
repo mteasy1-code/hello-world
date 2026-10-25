@@ -1,0 +1,57 @@
+name: Temporary Portable Faster Whisper Runtime
+
+on:
+  push:
+    branches:
+      - temp-faster-whisper-20261024
+    paths:
+      - .github/workflows/temp-portable-fw-runtime-20261024.yml
+
+permissions:
+  contents: read
+
+jobs:
+  build-runtime:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    steps:
+      - name: Download standalone Python 3.11
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 8 --retry-delay 5 \
+            -o python.tar.gz \
+            'https://github.com/astral-sh/python-build-standalone/releases/download/20260203/cpython-3.11.14%2B20260203-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz'
+          mkdir -p runtime
+          tar -xzf python.tar.gz -C runtime
+          runtime/python/bin/python3 --version
+
+      - name: Install faster-whisper runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime/python/bin/python3 -m pip install --upgrade pip
+          runtime/python/bin/python3 -m pip install faster-whisper==1.2.0
+          runtime/python/bin/python3 - <<'PY'
+          import ctranslate2, faster_whisper, av, onnxruntime, tokenizers
+          print('ctranslate2', ctranslate2.__version__)
+          print('faster_whisper', faster_whisper.__version__)
+          print('av', av.__version__)
+          print('onnxruntime', onnxruntime.__version__)
+          print('tokenizers', tokenizers.__version__)
+          PY
+          find runtime/python -type d -name '__pycache__' -prune -exec rm -rf {} + || true
+          rm -rf runtime/python/lib/python3.11/site-packages/pip/_vendor/distlib/*.exe || true
+          cat > runtime/README.txt <<'TXT'
+          Portable CPython 3.11 runtime with faster-whisper 1.2.0 for Linux x86_64.
+          TXT
+          sha256sum runtime/python/bin/python3 > runtime/SHA256SUMS.txt
+          du -sh runtime
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: portable-faster-whisper-py311
+          path: runtime/
+          compression-level: 0
+          retention-days: 2
+          if-no-files-found: error
