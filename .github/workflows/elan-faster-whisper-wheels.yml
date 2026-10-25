@@ -1,0 +1,28 @@
+name: ELAN Faster Whisper Wheels
+on:
+  push:
+    paths:
+      - '.github/workflows/elan-faster-whisper-wheels.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Download Linux wheels
+        run: |
+          set -euxo pipefail
+          mkdir -p bundle
+          python -m pip download --only-binary=:all: --dest bundle 'faster-whisper==1.2.1'
+          ls -lh bundle
+      - uses: actions/upload-artifact@v4
+        with:
+          name: elan-faster-whisper-wheels
+          path: bundle
+          compression-level: 0
+          retention-days: 1
