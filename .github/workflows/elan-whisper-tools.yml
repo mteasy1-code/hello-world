@@ -8,29 +8,149 @@ permissions:
   contents: read
 jobs:
   package:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
-      - name: Download whisper.cpp Linux binary
+      - name: Download and verify whisper.cpp Linux binary
+        shell: bash
         run: |
-          set -euxo pipefail
-          mkdir -p bundle/bin bundle/models
+          set -euo pipefail
+          mkdir -p bundle/bin bundle/models bundle/samples bundle/validation diagnostics dist
           curl -L --retry 5 --fail -o /tmp/whisper-bin.tar.gz \
             https://github.com/ggml-org/whisper.cpp/releases/download/b5454/whisper-bin-ubuntu-x64.tar.gz
-          tar -xzf /tmp/whisper-bin.tar.gz -C bundle/bin
-      - name: Download multilingual small q5_1 model
+          echo 'a72becf15d7917f990f6313867a52638b82b7f9ef237fb0c980dac56a135781c  /tmp/whisper-bin.tar.gz' | sha256sum -c - | tee diagnostics/binary-checksum.txt
+          # Keep the binary, dynamic libraries, symlinks and executable modes together.
+          tar -xzf /tmp/whisper-bin.tar.gz -C bundle/bin --strip-components=1
+          test -x bundle/bin/whisper-cli
+          bundle/bin/whisper-cli --help > diagnostics/whisper-help.txt 2>&1
+          ldd bundle/bin/whisper-cli | tee diagnostics/ldd.txt
+          ! grep -q 'not found' diagnostics/ldd.txt
+      - name: Download and verify multilingual small q5_1 model
+        shell: bash
         run: |
-          set -euxo pipefail
+          set -euo pipefail
           curl -L --retry 5 --fail -o bundle/models/ggml-small-q5_1.bin \
             https://github.com/w3xgroup/taskurio-models/releases/download/whisper-models-v1/ggml-small-q5_1.bin
-          echo 'ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb  bundle/models/ggml-small-q5_1.bin' | sha256sum -c -
-      - name: Inventory
+          echo 'ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb  bundle/models/ggml-small-q5_1.bin' | sha256sum -c - | tee diagnostics/model-checksum.txt
+      - name: Download pinned Chinese smoke-test audio
+        shell: bash
         run: |
-          find bundle -maxdepth 5 -type f -printf '%p\t%s bytes\n' | sort
-      - name: Upload bundle
+          set -euo pipefail
+          curl -L --retry 5 --fail -o bundle/samples/asr_example.wav \
+            https://raw.githubusercontent.com/modelscope/FunASR/fbbfe01800a8c4c9103cb2150fb1a5d06cc64758/runtime/funasr_api/asr_example.wav
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          audio = Path('bundle/samples/asr_example.wav').read_bytes()
+          assert len(audio) == 177572, f'Unexpected audio size: {len(audio)}'
+          blob = b'blob ' + str(len(audio)).encode() + b'\0' + audio
+          assert hashlib.sha1(blob).hexdigest() == 'bf13bb160e4aca65c2bdc2af94eed6dac47916ab', 'Audio Git blob hash mismatch'
+          PY
+      - name: Recognize Chinese audio and validate timestamps
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p bundle/tools
+          cat > bundle/tools/validate.py <<'PY'
+          import json
+          import math
+          import re
+          import sys
+          import wave
+          from pathlib import Path
+
+          root = Path(sys.argv[1]).resolve()
+          prefix = Path(sys.argv[2]).resolve()
+          with wave.open(str(root / 'samples/asr_example.wav'), 'rb') as wav:
+              duration_ms = wav.getnframes() / wav.getframerate() * 1000
+              assert wav.getnchannels() == 1 and wav.getframerate() == 16000
+          data = json.loads(prefix.with_suffix('.json').read_text(encoding='utf-8'))
+          segments = data['transcription']
+          assert segments, 'No transcription segments'
+          previous_end = 0
+          for segment in segments:
+              start, end = segment['offsets']['from'], segment['offsets']['to']
+              assert isinstance(start, int) and isinstance(end, int)
+              assert 0 <= previous_end <= start < end <= math.ceil(duration_ms), (start, end, duration_ms)
+              assert segment['text'].strip(), 'Empty segment text'
+              previous_end = end
+          text = ''.join(s['text'] for s in segments)
+          assert re.search(r'[\u3400-\u9fff]', text), 'No Chinese text'
+          normalized = re.sub(r'\s+', '', text)
+          assert '欢迎' in normalized or '歡迎' in normalized, text
+          assert '语音识别' in normalized or '語音識別' in normalized, text
+          srt = prefix.with_suffix('.srt').read_text(encoding='utf-8-sig')
+          stamps = re.findall(r'(\d{2}):(\d{2}):(\d{2}),(\d{3}) --> (\d{2}):(\d{2}):(\d{2}),(\d{3})', srt)
+          assert len(stamps) == len(segments), 'SRT/JSON segment count mismatch'
+          def millis(parts):
+              h, m, s, ms = map(int, parts)
+              return ((h * 60 + m) * 60 + s) * 1000 + ms
+          for stamp, segment in zip(stamps, segments):
+              assert millis(stamp[:4]) == segment['offsets']['from']
+              assert millis(stamp[4:]) == segment['offsets']['to']
+          report = {
+              'passed': True, 'engine': 'whisper.cpp b5454', 'language': 'zh',
+              'audio_duration_ms': duration_ms, 'segments': len(segments), 'text': text,
+              'timestamp_unit': 'milliseconds', 'srt_json_timestamps_equal': True,
+              'scope': 'Chinese single-speaker smoke test; classroom speaker/overlap accuracy not measured',
+          }
+          prefix.with_suffix('.validation.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          print(json.dumps(report, ensure_ascii=False, indent=2))
+          PY
+          python3 --version | tee diagnostics/python-version.txt
+          bundle/bin/whisper-cli -ng -t 2 -l zh \
+            -m bundle/models/ggml-small-q5_1.bin -f bundle/samples/asr_example.wav \
+            -oj -osrt -of "$PWD/bundle/validation/asr" 2>&1 | tee diagnostics/inference.log
+          python3 bundle/tools/validate.py bundle bundle/validation/asr | tee diagnostics/validation.txt
+      - name: Package and verify relocated bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > bundle/README.txt <<'TXT'
+          ELAN Chinese ASR helper — Linux x86_64 CPU, tested on Ubuntu 22.04.
+          Engine: whisper.cpp b5454; model: multilingual small q5_1.
+          Requires the host's glibc, libstdc++, OpenMP runtime and Python 3 standard library for validation.
+          Keep bin/ intact, including all shared libraries and symlinks.
+          Verify contents: (cd bundle && sha256sum -c SHA256SUMS)
+          Example from the extracted bundle directory:
+            bin/whisper-cli -ng -l zh -m models/ggml-small-q5_1.bin -f your-16k-mono.wav -oj -osrt -of result
+          JSON segment offsets are milliseconds. Review and align results with the actual media in ELAN.
+          The pinned FunASR sample and validation outputs demonstrate a short Chinese recognition run.
+          This test does not measure classroom teacher/student attribution, overlap handling, or timestamp accuracy against human annotation.
+          Sample source: modelscope/FunASR, commit fbbfe01800a8c4c9103cb2150fb1a5d06cc64758, runtime/funasr_api/asr_example.wav.
+          Model mirror: w3xgroup/taskurio-models release whisper-models-v1; model SHA256 is checked during packaging.
+          TXT
+          (cd bundle && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+          (cd bundle && test -z "$(find . -xtype l -print)" && sha256sum -c SHA256SUMS) > diagnostics/content-checksums.txt
+          tar -czf dist/elan-whisper-tools-linux-x64.tar.gz bundle
+          (cd dist && sha256sum elan-whisper-tools-linux-x64.tar.gz > elan-whisper-tools-linux-x64.tar.gz.sha256)
+          mkdir -p /tmp/elan-relocated
+          tar -xzf dist/elan-whisper-tools-linux-x64.tar.gz -C /tmp/elan-relocated
+          relocated=/tmp/elan-relocated/bundle
+          (cd "$relocated" && sha256sum -c SHA256SUMS && test -z "$(find . -xtype l -print)") > diagnostics/relocated-checksums.txt
+          "$relocated/bin/whisper-cli" --help > diagnostics/relocated-help.txt 2>&1
+          "$relocated/bin/whisper-cli" -ng -t 2 -l zh \
+            -m "$relocated/models/ggml-small-q5_1.bin" -f "$relocated/samples/asr_example.wav" \
+            -oj -osrt -of /tmp/elan-relocated/asr 2>&1 | tee diagnostics/relocated-inference.log
+          python3 "$relocated/tools/validate.py" "$relocated" /tmp/elan-relocated/asr | tee diagnostics/relocated-validation.txt
+          cp /tmp/elan-relocated/asr.validation.json dist/relocated-validation.json
+          cp bundle/validation/asr.validation.json dist/validation.json
+          find bundle -maxdepth 4 -type f -printf '%p\t%s bytes\n' | sort > diagnostics/inventory.txt
+      - name: Upload verified bundle
         uses: actions/upload-artifact@v4
         with:
           name: elan-whisper-tools
-          path: bundle
+          path: dist
+          if-no-files-found: error
           compression-level: 0
-          retention-days: 1
+          retention-days: 30
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: elan-whisper-tools-failure-diagnostics
+          path: |
+            diagnostics
+            bundle/validation
+          if-no-files-found: warn
+          retention-days: 30

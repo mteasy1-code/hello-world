@@ -1,0 +1,161 @@
+name: ELAN ASR Verified Linux Runtime
+
+on:
+  push:
+    paths:
+      - '.github/workflows/elan-asr-verified.yml'
+      - 'elan_asr/**'
+      - 'tests/verify_asr.py'
+      - 'docs/ELAN_ASR.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      HF_HUB_DISABLE_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download and verify portable CPython
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p bundle/examples bundle/verification bundle/tests dist
+          curl -fL --retry 5 --connect-timeout 30 --max-time 600 -o python.tar.gz \
+            'https://github.com/astral-sh/python-build-standalone/releases/download/20260203/cpython-3.11.14%2B20260203-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz'
+          echo 'e5696efed11346d8c53ec89587bbd3e4bce79cabdd67a62e7af60af62f01159c  python.tar.gz' | sha256sum -c -
+          tar -xzf python.tar.gz -C bundle
+          bundle/python/bin/python3 --version
+      - name: Resolve wheels and install all dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle/python/bin/python3 -m pip download --only-binary=:all: --dest wheels -r elan_asr/requirements.txt
+          bundle/python/bin/python3 -m pip install --no-index --find-links wheels -r elan_asr/requirements.txt
+          bundle/python/bin/python3 -m pip check | tee bundle/verification/pip-check.txt
+          bundle/python/bin/python3 -m pip freeze --all > bundle/verification/requirements.lock.txt
+          sha256sum wheels/*.whl > bundle/verification/wheels.sha256
+          bundle/python/bin/python3 - <<'PY' | tee bundle/verification/imports.json
+          import av, ctranslate2, faster_whisper, huggingface_hub, onnxruntime, requests, tokenizers
+          import importlib.metadata, json, platform
+          names = ['faster-whisper', 'ctranslate2', 'av', 'onnxruntime', 'tokenizers', 'requests', 'huggingface-hub']
+          print(json.dumps({'python': platform.python_version(), 'packages': {n: importlib.metadata.version(n) for n in names}}, indent=2))
+          PY
+      - name: Download complete multilingual model and pinned Chinese fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle/python/bin/python3 - <<'PY'
+          import json, os, pathlib
+          from huggingface_hub import HfApi, snapshot_download
+          repo = 'Systran/faster-whisper-small'
+          revision = HfApi().model_info(repo).sha
+          snapshot_download(repo, revision=revision, local_dir='bundle/models/small',
+                            allow_patterns=['model.bin', 'config.json', 'tokenizer.json', 'vocabulary.json', 'preprocessor_config.json', '*LICENSE*', 'README.md'])
+          for name in ('model.bin', 'config.json', 'tokenizer.json', 'vocabulary.json'):
+              p = pathlib.Path('bundle/models/small') / name
+              assert p.is_file() and p.stat().st_size > 0, name
+          provenance = {'repository': os.environ['GITHUB_REPOSITORY'], 'commit': os.environ['GITHUB_SHA'],
+                        'run_url': f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+                        'model_repository': repo, 'model_revision': revision,
+                        'fixture_url': 'https://raw.githubusercontent.com/modelscope/FunASR/fbbfe01800a8c4c9103cb2150fb1a5d06cc64758/runtime/funasr_api/asr_example.wav',
+                        'fixture_git_blob_sha1': 'bf13bb160e4aca65c2bdc2af94eed6dac47916ab'}
+          pathlib.Path('bundle/verification/provenance.json').write_text(json.dumps(provenance, indent=2) + '\n')
+          PY
+          curl -fL --retry 5 --connect-timeout 30 --max-time 120 -o bundle/examples/asr_example.wav \
+            'https://raw.githubusercontent.com/modelscope/FunASR/fbbfe01800a8c4c9103cb2150fb1a5d06cc64758/runtime/funasr_api/asr_example.wav'
+          test "$(git hash-object bundle/examples/asr_example.wav)" = bf13bb160e4aca65c2bdc2af94eed6dac47916ab
+          curl -fL --retry 5 --max-time 120 -o bundle/examples/FunASR-LICENSE.txt \
+            'https://raw.githubusercontent.com/modelscope/FunASR/fbbfe01800a8c4c9103cb2150fb1a5d06cc64758/LICENSE'
+      - name: Offline Chinese inference and ELAN output verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp elan_asr/transcribe.py elan_asr/run.sh elan_asr/manifest.py elan_asr/requirements.txt bundle/
+          cp tests/verify_asr.py bundle/tests/
+          cp docs/ELAN_ASR.md bundle/README.md
+          chmod +x bundle/run.sh
+          export HF_HOME="$RUNNER_TEMP/empty-asr-cache-build"
+          mkdir -p "$HF_HOME"
+          bundle/run.sh bundle/examples/asr_example.wav --output bundle/verification/chinese
+          bundle/python/bin/python3 bundle/tests/verify_asr.py bundle/verification/chinese bundle/examples/asr_example.wav
+          bundle/python/bin/python3 bundle/manifest.py bundle
+          tar -czf dist/elan-asr-linux-x86_64.tar.gz -C bundle .
+          (cd dist && sha256sum elan-asr-linux-x86_64.tar.gz > elan-asr-linux-x86_64.tar.gz.sha256)
+      - name: Relocate archive and rerun with empty cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd dist && sha256sum -c elan-asr-linux-x86_64.tar.gz.sha256)
+          portable_dir="$RUNNER_TEMP/relocated-asr-runtime"
+          mkdir -p "$portable_dir"
+          tar -xzf dist/elan-asr-linux-x86_64.tar.gz -C "$portable_dir"
+          export HF_HOME="$RUNNER_TEMP/empty-asr-cache-relocated"
+          mkdir -p "$HF_HOME"
+          "$portable_dir/python/bin/python3" "$portable_dir/manifest.py" "$portable_dir" --verify
+          "$portable_dir/python/bin/python3" -m pip check
+          "$portable_dir/run.sh" "$portable_dir/examples/asr_example.wav" --output "$RUNNER_TEMP/relocated-chinese"
+          "$portable_dir/python/bin/python3" "$portable_dir/tests/verify_asr.py" "$RUNNER_TEMP/relocated-chinese" "$portable_dir/examples/asr_example.wav"
+          cp "$RUNNER_TEMP/relocated-chinese.validation.json" dist/relocation-validation.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: elan-asr-verified-linux-x86_64
+          path: dist/
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: elan-asr-failure-diagnostics
+          path: bundle/verification/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  verify:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      HF_HUB_DISABLE_TELEMETRY: '1'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: elan-asr-verified-linux-x86_64
+          path: artifact
+      - name: Verify downloaded archive, imports and offline inference
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd artifact && sha256sum -c elan-asr-linux-x86_64.tar.gz.sha256)
+          portable_dir="$RUNNER_TEMP/clean-runtime"
+          mkdir -p "$portable_dir"
+          tar -xzf artifact/elan-asr-linux-x86_64.tar.gz -C "$portable_dir"
+          export HF_HOME="$RUNNER_TEMP/empty-hf-cache"
+          mkdir -p "$HF_HOME"
+          "$portable_dir/python/bin/python3" "$portable_dir/manifest.py" "$portable_dir" --verify
+          "$portable_dir/python/bin/python3" -m pip check
+          "$portable_dir/python/bin/python3" -c 'import av, ctranslate2, faster_whisper, huggingface_hub, onnxruntime, requests, tokenizers'
+          "$portable_dir/run.sh" "$portable_dir/examples/asr_example.wav" --output "$RUNNER_TEMP/chinese"
+          "$portable_dir/python/bin/python3" "$portable_dir/tests/verify_asr.py" "$RUNNER_TEMP/chinese" "$portable_dir/examples/asr_example.wav"
+          mkdir results
+          cp "$RUNNER_TEMP"/chinese.* results/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: elan-asr-test-${{ matrix.os }}
+          path: results/
+          retention-days: 30
+          if-no-files-found: error
