@@ -1,0 +1,65 @@
+name: ELAN Sherpa Diarization Tools
+
+on:
+  push:
+    paths:
+      - '.github/workflows/elan-sherpa-diarization-tools.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download sherpa-onnx runtime and speaker models
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p bundle/runtime bundle/models
+          curl -fL --retry 5 --retry-delay 3 \
+            -o sherpa.tar.bz2 \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/sherpa-onnx-v2.0.1-linux-x64-shared.tar.bz2
+          tar -xjf sherpa.tar.bz2 -C bundle/runtime --strip-components=1
+
+          curl -fL --retry 5 --retry-delay 3 \
+            -o pyannote.tar.bz2 \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2
+          tar -xjf pyannote.tar.bz2 -C bundle/models
+
+          curl -fL --retry 5 --retry-delay 3 \
+            -o bundle/models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx
+
+          curl -fL --retry 5 --retry-delay 3 \
+            -o bundle/models/silero_vad.onnx \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx
+
+          find bundle -type f -printf '%p\t%s bytes\n' | sort | tee bundle/FILES.txt
+
+      - name: Verify diarization binaries and models
+        shell: bash
+        run: |
+          set -euxo pipefail
+          export PATH="$PWD/bundle/runtime/bin:$PATH"
+          export LD_LIBRARY_PATH="$PWD/bundle/runtime/lib:${LD_LIBRARY_PATH:-}"
+          find bundle/runtime/bin -maxdepth 1 -type f -printf '%f\n' | sort | tee bundle/BINARIES.txt
+          test -s bundle/models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx
+          test -s bundle/models/silero_vad.onnx
+          find bundle/models -iname '*.onnx' -type f -print | tee bundle/MODELS.txt
+          command -v sherpa-onnx-offline-speaker-diarization
+          sherpa-onnx-offline-speaker-diarization --help > bundle/diarization-help.txt 2>&1 || true
+          command -v sherpa-onnx-speaker-identification || true
+          command -v sherpa-onnx-offline-source-separation || true
+
+      - name: Upload portable diarization bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: elan-sherpa-diarization-tools
+          path: bundle
+          compression-level: 0
+          retention-days: 1
