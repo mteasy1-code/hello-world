@@ -1,0 +1,31 @@
+name: Temporary Pyannote OSD Py311 Wheels
+
+on:
+  push:
+    branches: [temp-pyannote-osd-20261026]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download Python 3.11 wheels
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p bundle/wheels
+          python -m pip download --only-binary=:all: --dest bundle/wheels \
+            onnxruntime numpy soundfile scipy
+          find bundle/wheels -type f -print0 | sort -z | xargs -0 sha256sum > bundle/SHA256SUMS.txt
+          python --version > bundle/PYTHON_VERSION.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pyannote-osd-py311-wheels
+          path: bundle
+          retention-days: 1
+          compression-level: 0
