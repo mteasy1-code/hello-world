@@ -1,0 +1,94 @@
+name: Temporary ELAN Large Turbo Model R13
+
+on:
+  push:
+    paths:
+      - '.github/workflows/temp-large-turbo-r13.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Download CTranslate2 large-v3-turbo INT8 model
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet 'huggingface_hub[hf_xet]>=0.29'
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          snapshot_download(
+              repo_id='Zoont/faster-whisper-large-v3-turbo-int8-ct2',
+              local_dir='model/large-v3-turbo-int8',
+              local_dir_use_symlinks=False,
+          )
+          PY
+          test -f model/large-v3-turbo-int8/model.bin
+          test -f model/large-v3-turbo-int8/config.json
+          test -f model/large-v3-turbo-int8/tokenizer.json
+          find model/large-v3-turbo-int8 -type f -printf '%p\t%s bytes\n' | sort
+      - name: Pack, hash and split model
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf large-v3-turbo-int8.tar.gz -C model large-v3-turbo-int8
+          sha256sum large-v3-turbo-int8.tar.gz > large-v3-turbo-int8.tar.gz.sha256
+          split -b 240M -d -a 2 large-v3-turbo-int8.tar.gz large-v3-turbo-int8.tar.gz.part-
+          sha256sum large-v3-turbo-int8.tar.gz.part-* > large-v3-turbo-parts.sha256
+          mkdir -p upload
+          for p in large-v3-turbo-int8.tar.gz.part-*; do
+            d="upload/${p##*.part-}"
+            mkdir -p "$d"
+            cp "$p" "$d/"
+            cp large-v3-turbo-int8.tar.gz.sha256 large-v3-turbo-parts.sha256 "$d/"
+          done
+          find upload -type f -printf '%p\t%s bytes\n' | sort
+      - name: Upload part 00
+        uses: actions/upload-artifact@v4
+        with:
+          name: elan-large-turbo-part-00
+          path: upload/00/
+          compression-level: 0
+          retention-days: 1
+      - name: Upload part 01
+        uses: actions/upload-artifact@v4
+        with:
+          name: elan-large-turbo-part-01
+          path: upload/01/
+          compression-level: 0
+          retention-days: 1
+      - name: Upload part 02
+        uses: actions/upload-artifact@v4
+        with:
+          name: elan-large-turbo-part-02
+          path: upload/02/
+          compression-level: 0
+          retention-days: 1
+      - name: Upload part 03
+        if: ${{ hashFiles('upload/03/*') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: elan-large-turbo-part-03
+          path: upload/03/
+          compression-level: 0
+          retention-days: 1
+      - name: Upload part 04
+        if: ${{ hashFiles('upload/04/*') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: elan-large-turbo-part-04
+          path: upload/04/
+          compression-level: 0
+          retention-days: 1
+      - name: Upload part 05
+        if: ${{ hashFiles('upload/05/*') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: elan-large-turbo-part-05
+          path: upload/05/
+          compression-level: 0
+          retention-days: 1
