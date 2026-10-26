@@ -1,0 +1,113 @@
+{
+  "status": "passed",
+  "checked_at_utc": "2026-10-26T11:38:55.452029+00:00",
+  "classification": "ASR初稿，未经人工听校",
+  "audio": {
+    "path": "<INSTALLATION_RUNTIME>/examples/asr_example.wav",
+    "sha256": "a1bd32dc78493c123f9625a66deee562aed2895f53fbc39f2cca3be7e6f4f20f",
+    "fixture_git_blob_sha1": "bf13bb160e4aca65c2bdc2af94eed6dac47916ab",
+    "duration_seconds": 5.5466875,
+    "channels": 1,
+    "sample_rate": 16000,
+    "sample_width_bytes": 2,
+    "frames": 88747
+  },
+  "runtime": "<RUNTIME>",
+  "provenance": {
+    "repository": "mteasy1-code/hello-world",
+    "commit": "eaed632e5268c852408954b0037d145787824898",
+    "run_url": "https://github.com/mteasy1-code/hello-world/actions/runs/40313876223",
+    "model_repository": "Systran/faster-whisper-small",
+    "model_revision": "536b0662742c02347bc0e980a01041f333bce120",
+    "fixture_url": "https://raw.githubusercontent.com/modelscope/FunASR/fbbfe01800a8c4c9103cb2150fb1a5d06cc64758/runtime/funasr_api/asr_example.wav",
+    "fixture_git_blob_sha1": "bf13bb160e4aca65c2bdc2af94eed6dac47916ab"
+  },
+  "engine": "faster-whisper",
+  "engine_version": "1.2.1",
+  "model": "small",
+  "compute": "CPU int8, 2 threads",
+  "transcript": "欢迎大家来体验打磨院推出的语音识别模型",
+  "segments": 1,
+  "words": 18,
+  "tiers": [
+    {
+      "id": "ASR_待分人",
+      "participant": null,
+      "annotations": 1,
+      "contents": [
+        "欢迎大家来体验打磨院推出的语音识别模型"
+      ]
+    }
+  ],
+  "speech_bounds_ms": [
+    [
+      560,
+      5040
+    ]
+  ],
+  "media_relative_url": "../elan-runtime/examples/asr_example.wav",
+  "checks": [
+    "工具包内 verify_asr.py --reference 空字符串通过；无本次逐字稿CER",
+    "所有段落与词严格位于媒体边界内",
+    "SRT/JSON/EAF文字及毫秒时间一致",
+    "时间槽及注释编号连续，引用有效",
+    "EAF绝对与相对媒体链接均指向本次原音频",
+    "每条有效轨道内容与JSON一致，仅ASR_待分人，无participant",
+    "运行时推理前两次、推理后两次7644项严格清单通过",
+    "三分卷外层SHA256、内部各卷及完整归档SHA256通过",
+    "源码提交及模型修订与已给定可信元数据一致",
+    "包内样例Git blob SHA1与provenance一致"
+  ],
+  "not_validated": [
+    "未人工回听、未逐字纠错；整段0–5.5466875秒仍需内容复核",
+    "未量化词级或段落声学边界误差，未验证强制对齐",
+    "未检验教师/学生身份映射、多人聚类、声源分离、重叠检测",
+    "未检验齐读、错峰齐读、齐答、错峰齐答；不能据本短样例宣称课堂分人精度达标"
+  ],
+  "artifacts": {
+    "asr_example_verified.json": {
+      "bytes": 2921,
+      "sha256": "7ecbdb92250ac2fbc973ef0f9eae021085113cd8e9740ae3546167368875d477"
+    },
+    "asr_example_verified.srt": {
+      "bytes": 90,
+      "sha256": "41e550f2d4e227c3394267887695084b39fe3be21cc10e01783d501d866d7259"
+    },
+    "asr_example_verified.eaf": {
+      "bytes": 1269,
+      "sha256": "df034e3568149d089e65d8bd488e8afca3dd882b700f9a4a65da3f5e629545a6"
+    },
+    "asr_example_verified.validation.json": {
+      "bytes": 1047,
+      "sha256": "cd696b24d0b0e9eb4362add4c4a8aed852576385828d472c5781b2d70ad773f5"
+    }
+  },
+  "bundled_validation": {
+    "status": "passed",
+    "audio_duration_seconds": 5.5466875,
+    "reported_duration_seconds": 5.5466875,
+    "language": "zh",
+    "transcript": "欢迎大家来体验打磨院推出的语音识别模型",
+    "reference": null,
+    "normalized_reference": null,
+    "normalized_transcript": "欢迎大家来体验打磨院推出的语音识别模型",
+    "character_error_rate": null,
+    "maximum_character_error_rate": null,
+    "segment_count": 1,
+    "word_count": 18,
+    "checks": [
+      "Chinese output",
+      "WAV duration",
+      "finite ordered timestamps",
+      "SRT text and millisecond timestamps",
+      "EAF annotation references and timestamps",
+      "unassigned speaker tier"
+    ],
+    "limitations": [
+      "A short single-speaker fixture does not establish classroom transcription accuracy.",
+      "Speaker identity and overlapping speech were not tested or assigned.",
+      "Timestamp bounds and export consistency do not establish acoustic alignment accuracy.",
+      "Reference normalization uses a limited traditional-to-simplified character mapping."
+    ]
+  }
+}

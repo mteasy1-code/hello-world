@@ -1,0 +1,77 @@
+{
+  "mode": "split",
+  "artifact_count": 3,
+  "archive_sha256": "3595416f3ae65ce000502e5868a6fbd47105341a302de0317894821f3758385b",
+  "status": "passed",
+  "runtime": "<INSTALLATION_RUNTIME>",
+  "reused": false,
+  "inventory_entries": 7644,
+  "inventory_stability": {
+    "before_execution": {
+      "inventory_entries": 7644,
+      "attempts": 2,
+      "retries": 1,
+      "consecutive_matches": 2,
+      "observations": [
+        {
+          "attempt": 1,
+          "status": "matched"
+        },
+        {
+          "attempt": 2,
+          "status": "matched"
+        }
+      ]
+    },
+    "after_execution": {
+      "inventory_entries": 7644,
+      "attempts": 2,
+      "retries": 1,
+      "consecutive_matches": 2,
+      "observations": [
+        {
+          "attempt": 1,
+          "status": "matched"
+        },
+        {
+          "attempt": 2,
+          "status": "matched"
+        }
+      ]
+    }
+  },
+  "source_commit": "eaed632e5268c852408954b0037d145787824898",
+  "model_revision": "536b0662742c02347bc0e980a01041f333bce120",
+  "checks": {
+    "pip_check": "No broken requirements found.",
+    "imports": "passed",
+    "smoke": {
+      "status": "passed",
+      "audio_duration_seconds": 5.5466875,
+      "reported_duration_seconds": 5.5466875,
+      "language": "zh",
+      "transcript": "欢迎大家来体验打磨院推出的语音识别模型",
+      "reference": "欢迎大家来体验达摩院推出的语音识别模型",
+      "normalized_reference": "欢迎大家来体验达摩院推出的语音识别模型",
+      "normalized_transcript": "欢迎大家来体验打磨院推出的语音识别模型",
+      "character_error_rate": 0.10526315789473684,
+      "maximum_character_error_rate": 0.45,
+      "segment_count": 1,
+      "word_count": 18,
+      "checks": [
+        "Chinese output",
+        "WAV duration",
+        "finite ordered timestamps",
+        "SRT text and millisecond timestamps",
+        "EAF annotation references and timestamps",
+        "unassigned speaker tier"
+      ],
+      "limitations": [
+        "A short single-speaker fixture does not establish classroom transcription accuracy.",
+        "Speaker identity and overlapping speech were not tested or assigned.",
+        "Timestamp bounds and export consistency do not establish acoustic alignment accuracy.",
+        "Reference normalization uses a limited traditional-to-simplified character mapping."
+      ]
+    }
+  }
+}

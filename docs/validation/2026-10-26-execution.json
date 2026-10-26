@@ -1,0 +1,96 @@
+{
+  "started_utc": "2026-10-26T11:37:53.024128+00:00",
+  "runtime": "<RUNTIME>",
+  "commands": [
+    {
+      "label": "pre_manifest_1",
+      "command": [
+        "<RUNTIME>/python/bin/python3",
+        "<RUNTIME>/manifest.py",
+        "<RUNTIME>",
+        "--verify"
+      ],
+      "started_utc": "2026-10-26T11:37:53.024234+00:00",
+      "completed_utc": "2026-10-26T11:37:55.049248+00:00",
+      "exit_code": 0,
+      "stdout": "Verified 7644 inventory entries\n",
+      "stderr": ""
+    },
+    {
+      "label": "pre_manifest_2",
+      "command": [
+        "<RUNTIME>/python/bin/python3",
+        "<RUNTIME>/manifest.py",
+        "<RUNTIME>",
+        "--verify"
+      ],
+      "started_utc": "2026-10-26T11:37:55.049665+00:00",
+      "completed_utc": "2026-10-26T11:37:56.888890+00:00",
+      "exit_code": 0,
+      "stdout": "Verified 7644 inventory entries\n",
+      "stderr": ""
+    },
+    {
+      "label": "offline_inference",
+      "command": [
+        "<RUNTIME>/run.sh",
+        "<INSTALLATION_RUNTIME>/examples/asr_example.wav",
+        "--output",
+        "<WORKSPACE>/skill-forward-use/asr_example_verified",
+        "--threads",
+        "2"
+      ],
+      "started_utc": "2026-10-26T11:37:56.889274+00:00",
+      "completed_utc": "2026-10-26T11:38:06.326388+00:00",
+      "exit_code": 0,
+      "stdout": "{\"duration\": 5.5466875, \"segments\": 1, \"text\": \"欢迎大家来体验打磨院推出的语音识别模型\", \"output_prefix\": \"<WORKSPACE>/skill-forward-use/asr_example_verified\"}\n",
+      "stderr": ""
+    },
+    {
+      "label": "verify_asr_no_reference",
+      "command": [
+        "<RUNTIME>/python/bin/python3",
+        "<RUNTIME>/tests/verify_asr.py",
+        "<WORKSPACE>/skill-forward-use/asr_example_verified",
+        "<INSTALLATION_RUNTIME>/examples/asr_example.wav",
+        "--reference",
+        ""
+      ],
+      "started_utc": "2026-10-26T11:38:06.326779+00:00",
+      "completed_utc": "2026-10-26T11:38:06.595780+00:00",
+      "exit_code": 0,
+      "stdout": "{\n  \"status\": \"passed\",\n  \"audio_duration_seconds\": 5.5466875,\n  \"reported_duration_seconds\": 5.5466875,\n  \"language\": \"zh\",\n  \"transcript\": \"欢迎大家来体验打磨院推出的语音识别模型\",\n  \"reference\": null,\n  \"normalized_reference\": null,\n  \"normalized_transcript\": \"欢迎大家来体验打磨院推出的语音识别模型\",\n  \"character_error_rate\": null,\n  \"maximum_character_error_rate\": null,\n  \"segment_count\": 1,\n  \"word_count\": 18,\n  \"checks\": [\n    \"Chinese output\",\n    \"WAV duration\",\n    \"finite ordered timestamps\",\n    \"SRT text and millisecond timestamps\",\n    \"EAF annotation references and timestamps\",\n    \"unassigned speaker tier\"\n  ],\n  \"limitations\": [\n    \"A short single-speaker fixture does not establish classroom transcription accuracy.\",\n    \"Speaker identity and overlapping speech were not tested or assigned.\",\n    \"Timestamp bounds and export consistency do not establish acoustic alignment accuracy.\",\n    \"Reference normalization uses a limited traditional-to-simplified character mapping.\"\n  ]\n}\n",
+      "stderr": ""
+    },
+    {
+      "label": "post_manifest_1",
+      "command": [
+        "<RUNTIME>/python/bin/python3",
+        "<RUNTIME>/manifest.py",
+        "<RUNTIME>",
+        "--verify"
+      ],
+      "started_utc": "2026-10-26T11:38:06.596169+00:00",
+      "completed_utc": "2026-10-26T11:38:08.276491+00:00",
+      "exit_code": 0,
+      "stdout": "Verified 7644 inventory entries\n",
+      "stderr": ""
+    },
+    {
+      "label": "post_manifest_2",
+      "command": [
+        "<RUNTIME>/python/bin/python3",
+        "<RUNTIME>/manifest.py",
+        "<RUNTIME>",
+        "--verify"
+      ],
+      "started_utc": "2026-10-26T11:38:08.277104+00:00",
+      "completed_utc": "2026-10-26T11:38:10.061092+00:00",
+      "exit_code": 0,
+      "stdout": "Verified 7644 inventory entries\n",
+      "stderr": ""
+    }
+  ],
+  "completed_utc": "2026-10-26T11:38:10.062129+00:00",
+  "status": "passed"
+}
