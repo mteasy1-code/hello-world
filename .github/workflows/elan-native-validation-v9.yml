@@ -1,0 +1,49 @@
+name: ELAN Native Validation V9
+on:
+  push:
+    branches: ['tools/elan-overlap-models-20261026-v9']
+    paths: ['.github/workflows/elan-native-validation-v9.yml']
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - name: Obtain official public ELAN distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet requests beautifulsoup4
+          python - <<'PY'
+          import requests,re,pathlib,json,hashlib,tarfile,zipfile,io
+          from bs4 import BeautifulSoup
+          from urllib.parse import urljoin
+          root=pathlib.Path('bundle');root.mkdir()
+          page='https://archive.mpi.nl/tla/elan/download'
+          r=requests.get(page,timeout=60);r.raise_for_status()
+          links=[urljoin(page,a.get('href','')) for a in BeautifulSoup(r.text,'html.parser').find_all('a',href=True)]
+          urls=[u for u in links if re.search(r'(?i)elan.*linux.*\.(tar\.gz|zip)$',u)]
+          assert urls,links
+          url=urls[0];assert 'mpi.nl' in url
+          r=requests.get(url,timeout=180);r.raise_for_status();raw=r.content
+          manifest={'page':page,'distribution_url':url,'distribution_sha256':hashlib.sha256(raw).hexdigest(),'files':[]}
+          files=[]
+          if url.endswith('.zip'):
+              z=zipfile.ZipFile(io.BytesIO(raw));files=[(n,z.read(n)) for n in z.namelist() if n.endswith(('.jar','.xsd'))]
+          else:
+              z=tarfile.open(fileobj=io.BytesIO(raw),mode='r:gz');files=[(t.name,z.extractfile(t).read()) for t in z.getmembers() if t.isfile() and t.name.endswith(('.jar','.xsd'))]
+          for name,data in files:
+              p=root/pathlib.PurePosixPath(name).name
+              if p.exists():continue
+              p.write_bytes(data);manifest['files'].append({'path':p.name,'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data)})
+          assert any(x['path'].endswith('.jar') for x in manifest['files'])
+          (root/'MANIFEST.json').write_text(json.dumps(manifest,indent=2));print(json.dumps(manifest,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: elan-native-validation-v9
+          path: bundle/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
