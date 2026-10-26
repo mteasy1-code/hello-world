@@ -1,0 +1,49 @@
+name: Temporary Sherpa Diarization Bundle
+
+on:
+  push:
+    branches:
+      - temp/sherpa-diarization-bundle-20261026
+    paths:
+      - '.github/workflows/temp-sherpa-diarization-bundle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - name: Download runtime wheels and acoustic models
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p bundle/wheels bundle/models
+          python3 -m pip download --only-binary=:all: --dest bundle/wheels sherpa-onnx numpy soundfile
+
+          curl -fL --retry 5 --connect-timeout 30 --max-time 600 \
+            -o bundle/models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2 \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2
+          tar -xjf bundle/models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2 -C bundle/models
+
+          curl -fL --retry 5 --connect-timeout 30 --max-time 600 \
+            -o bundle/models/3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx
+
+          curl -fL --retry 5 --connect-timeout 30 --max-time 600 \
+            -o bundle/models/3dspeaker_speech_eres2net_base_200k_sv_zh-cn_16k-common.onnx \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_200k_sv_zh-cn_16k-common.onnx
+
+          find bundle -type f -print0 | sort -z | xargs -0 sha256sum > bundle/SHA256SUMS.txt
+          du -ah bundle | sort -h | tail -n 30
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: sherpa-diarization-acoustic-bundle
+          path: bundle/
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
