@@ -1,0 +1,44 @@
+name: Temporary Pyannote OSD Runtime
+
+on:
+  push:
+    branches: [temp-pyannote-osd-20261026]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download public ONNX segmentation model
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p bundle/model bundle/wheels
+          curl -L --retry 5 --fail \
+            -o bundle/model/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2 \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2
+          echo '24615ee884c897d9d2ba09bb4d30da6bb1b15e685065962db5b02e76e4996488  bundle/model/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2' | sha256sum -c -
+          tar -xjf bundle/model/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2 -C bundle/model
+      - name: Download portable inference wheels
+        run: |
+          python -m pip download --only-binary=:all: --dest bundle/wheels \
+            sherpa-onnx onnxruntime numpy soundfile
+          python -m pip freeze > bundle/build-environment.txt
+      - name: Add verification metadata
+        shell: bash
+        run: |
+          find bundle -type f -print0 | sort -z | xargs -0 sha256sum > bundle/SHA256SUMS.txt
+          cat > bundle/README.txt <<'EOF'
+          Public pyannote segmentation 3.0 ONNX runtime bundle.
+          Source model: k2-fsa/sherpa-onnx GitHub release.
+          Purpose: speech activity and overlap-aware speaker segmentation support.
+          The model output must still be mapped to known classroom speakers with independent speaker embeddings and context.
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pyannote-osd-runtime
+          path: bundle
+          retention-days: 1
+          compression-level: 0
