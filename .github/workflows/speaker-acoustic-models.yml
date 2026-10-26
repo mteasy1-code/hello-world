@@ -14,6 +14,10 @@ jobs:
   package-models:
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
       - name: Prepare model and wheel directories
         run: |
           set -euxo pipefail
@@ -48,7 +52,7 @@ jobs:
           Speaker segmentation: k2-fsa/sherpa-onnx release speaker-segmentation-models, pyannote segmentation-3.0 ONNX export.
           Chinese speaker embedding: 3D-Speaker CAMPPlus zh-cn common, k2-fsa/sherpa-onnx release speaker-recongition-models.
           Independent cross-check embedding: WeSpeaker VoxCeleb ResNet34-LM ONNX, pinned revision f0c48c298fd835726c27956a5d617bad7115627e.
-          Runtime: wheels downloaded from PyPI for CPython 3.11 Linux x86_64 on ubuntu-24.04.
+          Runtime: wheels downloaded from PyPI for CPython 3.13 Linux x86_64 on ubuntu-24.04.
           EOF
           (cd bundle && find . -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt)
           du -ah bundle | sort -h | tail -30
@@ -56,7 +60,7 @@ jobs:
       - name: Upload offline bundle
         uses: actions/upload-artifact@v4
         with:
-          name: classroom-speaker-acoustic-models-linux-x86_64
+          name: classroom-speaker-acoustic-models-py313-linux-x86_64
           path: bundle
           compression-level: 0
           retention-days: 3
