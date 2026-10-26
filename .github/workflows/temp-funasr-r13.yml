@@ -1,0 +1,99 @@
+name: Temporary FunASR Diarization R13
+
+on:
+  push:
+    paths:
+      - '.github/workflows/temp-funasr-r13.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Download FunASR wheel and official models
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet 'huggingface_hub[hf_xet]>=0.29'
+          mkdir -p bundle/wheels bundle/models
+          python -m pip download --no-deps --dest bundle/wheels 'funasr==1.4.16'
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          models = {
+              'paraformer-zh': 'funasr/paraformer-zh',
+              'fsmn-vad': 'funasr/fsmn-vad',
+              'ct-punc': 'funasr/ct-punc',
+              'campplus': 'funasr/campplus',
+          }
+          for name, repo in models.items():
+              print('downloading', repo, flush=True)
+              snapshot_download(repo_id=repo, local_dir=f'bundle/models/{name}', local_dir_use_symlinks=False)
+          PY
+          find bundle -type f -printf '%p\t%s bytes\n' | sort
+      - name: Pack, hash and split bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf funasr-r13.tar.gz bundle
+          sha256sum funasr-r13.tar.gz > funasr-r13.tar.gz.sha256
+          split -b 240M -d -a 2 funasr-r13.tar.gz funasr-r13.tar.gz.part-
+          sha256sum funasr-r13.tar.gz.part-* > funasr-r13-parts.sha256
+          mkdir -p upload
+          for p in funasr-r13.tar.gz.part-*; do
+            suffix="${p##*.part-}"
+            mkdir -p "upload/$suffix"
+            cp "$p" "upload/$suffix/"
+            cp funasr-r13.tar.gz.sha256 funasr-r13-parts.sha256 "upload/$suffix/"
+          done
+          find upload -type f -printf '%p\t%s bytes\n' | sort
+      - name: Upload part 00
+        uses: actions/upload-artifact@v4
+        with: {name: funasr-r13-part-00, path: upload/00/, compression-level: 0, retention-days: 1}
+      - name: Upload part 01
+        if: ${{ hashFiles('upload/01/*') != '' }}
+        uses: actions/upload-artifact@v4
+        with: {name: funasr-r13-part-01, path: upload/01/, compression-level: 0, retention-days: 1}
+      - name: Upload part 02
+        if: ${{ hashFiles('upload/02/*') != '' }}
+        uses: actions/upload-artifact@v4
+        with: {name: funasr-r13-part-02, path: upload/02/, compression-level: 0, retention-days: 1}
+      - name: Upload part 03
+        if: ${{ hashFiles('upload/03/*') != '' }}
+        uses: actions/upload-artifact@v4
+        with: {name: funasr-r13-part-03, path: upload/03/, compression-level: 0, retention-days: 1}
+      - name: Upload part 04
+        if: ${{ hashFiles('upload/04/*') != '' }}
+        uses: actions/upload-artifact@v4
+        with: {name: funasr-r13-part-04, path: upload/04/, compression-level: 0, retention-days: 1}
+      - name: Upload part 05
+        if: ${{ hashFiles('upload/05/*') != '' }}
+        uses: actions/upload-artifact@v4
+        with: {name: funasr-r13-part-05, path: upload/05/, compression-level: 0, retention-days: 1}
+      - name: Upload part 06
+        if: ${{ hashFiles('upload/06/*') != '' }}
+        uses: actions/upload-artifact@v4
+        with: {name: funasr-r13-part-06, path: upload/06/, compression-level: 0, retention-days: 1}
+      - name: Upload part 07
+        if: ${{ hashFiles('upload/07/*') != '' }}
+        uses: actions/upload-artifact@v4
+        with: {name: funasr-r13-part-07, path: upload/07/, compression-level: 0, retention-days: 1}
+      - name: Upload part 08
+        if: ${{ hashFiles('upload/08/*') != '' }}
+        uses: actions/upload-artifact@v4
+        with: {name: funasr-r13-part-08, path: upload/08/, compression-level: 0, retention-days: 1}
+      - name: Upload part 09
+        if: ${{ hashFiles('upload/09/*') != '' }}
+        uses: actions/upload-artifact@v4
+        with: {name: funasr-r13-part-09, path: upload/09/, compression-level: 0, retention-days: 1}
+      - name: Upload part 10
+        if: ${{ hashFiles('upload/10/*') != '' }}
+        uses: actions/upload-artifact@v4
+        with: {name: funasr-r13-part-10, path: upload/10/, compression-level: 0, retention-days: 1}
+      - name: Upload part 11
+        if: ${{ hashFiles('upload/11/*') != '' }}
+        uses: actions/upload-artifact@v4
+        with: {name: funasr-r13-part-11, path: upload/11/, compression-level: 0, retention-days: 1}
