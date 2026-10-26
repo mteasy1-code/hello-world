@@ -1,0 +1,51 @@
+name: ELAN Overlap Models V9
+on:
+  push:
+    branches: ['tools/elan-overlap-models-20261026-v9']
+    paths: ['.github/workflows/elan-overlap-models-v9.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - name: Retrieve public models without classroom media
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet requests numpy onnxruntime
+          mkdir -p bundle
+          python - <<'PY'
+          import requests, pathlib, hashlib, json, time
+          root=pathlib.Path('bundle')
+          models=[('csukuangfj/sherpa-onnx-pyannote-segmentation-3-0','main','segmentation',['model.onnx','README.md','LICENSE']),('speechbrain/sepformer-whamr','8ff25187c1c4d4968b31a6cbf5679372cdaf4999','separation',['encoder.ckpt','decoder.ckpt','masknet.ckpt','hyperparams.yaml','README.md'])]
+          manifest=[]
+          for repo, rev, folder, names in models:
+              meta=requests.get(f'https://huggingface.co/api/models/{repo}/revision/{rev}?blobs=true',timeout=60); meta.raise_for_status(); meta=meta.json(); sha=meta['sha']
+              siblings={s['rfilename']:s for s in meta.get('siblings',[])}
+              dest=root/folder; dest.mkdir()
+              for name in names:
+                  url=f'https://huggingface.co/{repo}/resolve/{sha}/{name}?download=true'
+                  r=requests.get(url,timeout=180); r.raise_for_status(); data=r.content
+                  p=dest/name; p.write_bytes(data); digest=hashlib.sha256(data).hexdigest()
+                  expected=siblings.get(name,{}).get('lfs',{}).get('sha256')
+                  if expected: assert digest==expected, (name,digest,expected)
+                  manifest.append(dict(path=str(p.relative_to(root)),bytes=len(data),sha256=digest,upstream_sha256=expected,repo=repo,revision=sha))
+          import onnxruntime as ort, numpy as np
+          s=ort.InferenceSession(str(root/'segmentation/model.onnx'),providers=['CPUExecutionProvider'])
+          inp=s.get_inputs()[0]; out=s.run(None,{inp.name:np.zeros((1,1,160000),np.float32)})
+          assert all(np.isfinite(x).all() for x in out)
+          report={'onnxruntime':ort.__version__,'input':inp.name,'shapes':[list(x.shape) for x in out],'metadata':s.get_modelmeta().custom_metadata_map,'scope':'zero-input load and inference test only; no classroom accuracy claim'}
+          (root/'validation.json').write_text(json.dumps(report,indent=2))
+          (root/'MANIFEST.json').write_text(json.dumps(manifest,indent=2))
+          print(json.dumps(report,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: elan-overlap-models-v9
+          path: bundle/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
