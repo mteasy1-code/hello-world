@@ -110,6 +110,49 @@ jobs:
           compression-level: 0
           retention-days: 30
           if-no-files-found: error
+      - name: Split runtime for connector downloads under 512 MiB
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir split
+          split -b 240M -d -a 2 dist/elan-asr-linux-x86_64.tar.gz split/elan-asr-linux-x86_64.tar.gz.part-
+          test "$(find split -name '*.part-*' | wc -l)" -eq 3
+          cp dist/elan-asr-linux-x86_64.tar.gz.sha256 split/
+          (cd split && sha256sum *.part-* > elan-asr-parts.sha256)
+          (cd split && sha256sum -c elan-asr-parts.sha256)
+      - name: Upload connector part 00
+        uses: actions/upload-artifact@v4
+        with:
+          name: elan-asr-runtime-part-00
+          path: |
+            split/elan-asr-linux-x86_64.tar.gz.part-00
+            split/elan-asr-linux-x86_64.tar.gz.sha256
+            split/elan-asr-parts.sha256
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error
+      - name: Upload connector part 01
+        uses: actions/upload-artifact@v4
+        with:
+          name: elan-asr-runtime-part-01
+          path: |
+            split/elan-asr-linux-x86_64.tar.gz.part-01
+            split/elan-asr-linux-x86_64.tar.gz.sha256
+            split/elan-asr-parts.sha256
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error
+      - name: Upload connector part 02
+        uses: actions/upload-artifact@v4
+        with:
+          name: elan-asr-runtime-part-02
+          path: |
+            split/elan-asr-linux-x86_64.tar.gz.part-02
+            split/elan-asr-linux-x86_64.tar.gz.sha256
+            split/elan-asr-parts.sha256
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error
       - name: Upload diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v4
