@@ -1,0 +1,35 @@
+name: TEMP R13 Sherpa Runtime
+
+on:
+  push:
+    paths:
+      - '.github/workflows/temp-r13-sherpa-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Download compatible sherpa-onnx wheels
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p bundle
+          python -m pip download --only-binary=:all: \
+            --platform manylinux2014_x86_64 \
+            --python-version 311 --implementation cp --abi cp311 \
+            -d bundle \
+            sherpa-onnx==2.0.1 sherpa-onnx-core==2.0.1
+          find bundle -type f -printf '%p\t%s bytes\n' | sort
+          sha256sum $(find bundle -type f | sort) > bundle/SHA256SUMS.txt
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: r13-sherpa-runtime
+          path: bundle
+          compression-level: 0
+          retention-days: 1
