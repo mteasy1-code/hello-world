@@ -1,0 +1,41 @@
+name: ELAN SenseVoice V9
+on:
+  push:
+    branches: ['tools/elan-overlap-models-20261026-v9']
+    paths: ['.github/workflows/elan-sensevoice-v9.yml']
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - name: Retrieve public bilingual model and offline wheels
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet requests
+          mkdir -p bundle/wheels
+          python -m pip download --only-binary=:all: --python-version 311 --implementation cp --abi cp311 --platform manylinux2014_x86_64 --platform manylinux_2_17_x86_64 sherpa-onnx -d bundle/wheels
+          python - <<'PY'
+          import requests,pathlib,hashlib,json
+          root=pathlib.Path('bundle'); dst=root/'sensevoice';dst.mkdir()
+          repo='csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17';rev='2365baeacb507f821a0c8120fcee3d484dba7a07'
+          names=['model.int8.onnx','tokens.txt','README.md','LICENSE']
+          manifest=[]
+          for name in names:
+              url=f'https://huggingface.co/{repo}/resolve/{rev}/{name}?download=true'
+              r=requests.get(url,timeout=180);r.raise_for_status();p=dst/name;p.write_bytes(r.content)
+              h=hashlib.sha256(r.content).hexdigest()
+              if name=='model.int8.onnx':assert h=='c71f0ce00bec95b07744e116345e33d8cbbe08cef896382cf907bf4b51a2cd51'
+              manifest.append(dict(path=str(p.relative_to(root)),sha256=h,bytes=len(r.content),repo=repo,revision=rev))
+          for p in (root/'wheels').glob('*'):manifest.append(dict(path=str(p.relative_to(root)),bytes=p.stat().st_size,sha256=hashlib.sha256(p.read_bytes()).hexdigest()))
+          (root/'MANIFEST.json').write_text(json.dumps(manifest,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: elan-sensevoice-v9
+          path: bundle/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
