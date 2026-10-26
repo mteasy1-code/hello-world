@@ -87,9 +87,11 @@ def main():
         parser.error(f"Missing local media: {audio}")
     if args.threads < 1:
         parser.error("--threads must be positive")
-    for filename in ("model.bin", "config.json", "tokenizer.json", "vocabulary.json"):
+    for filename in ("model.bin", "config.json", "tokenizer.json"):
         if not (model_dir / filename).is_file():
             parser.error(f"Missing offline model file: {filename}")
+    if not any((model_dir / name).is_file() for name in ("vocabulary.txt", "vocabulary.json")):
+        parser.error("Missing offline model vocabulary (vocabulary.txt or vocabulary.json)")
     if prefix.suffix:
         parser.error("--output must be a prefix without a file extension")
     for ext in (".json", ".srt", ".eaf"):

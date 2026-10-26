@@ -56,10 +56,11 @@ jobs:
           repo = 'Systran/faster-whisper-small'
           revision = HfApi().model_info(repo).sha
           snapshot_download(repo, revision=revision, local_dir='bundle/models/small',
-                            allow_patterns=['model.bin', 'config.json', 'tokenizer.json', 'vocabulary.json', 'preprocessor_config.json', '*LICENSE*', 'README.md'])
-          for name in ('model.bin', 'config.json', 'tokenizer.json', 'vocabulary.json'):
+                            allow_patterns=['model.bin', 'config.json', 'tokenizer.json', 'vocabulary.*', 'preprocessor_config.json', '*LICENSE*', 'README.md'])
+          for name in ('model.bin', 'config.json', 'tokenizer.json'):
               p = pathlib.Path('bundle/models/small') / name
               assert p.is_file() and p.stat().st_size > 0, name
+          assert any((pathlib.Path('bundle/models/small') / name).is_file() for name in ('vocabulary.txt', 'vocabulary.json')), 'Missing vocabulary'
           provenance = {'repository': os.environ['GITHUB_REPOSITORY'], 'commit': os.environ['GITHUB_SHA'],
                         'run_url': f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
                         'model_repository': repo, 'model_revision': revision,
