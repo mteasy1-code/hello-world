@@ -16,12 +16,17 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 25
     steps:
-      - name: Download runtime wheels and acoustic models
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download Python 3.11 runtime wheels and acoustic models
         shell: bash
         run: |
           set -euo pipefail
+          python --version
           mkdir -p bundle/wheels bundle/models
-          python3 -m pip download --only-binary=:all: --dest bundle/wheels sherpa-onnx numpy soundfile
+          python -m pip download --only-binary=:all: --dest bundle/wheels sherpa-onnx numpy soundfile
 
           curl -fL --retry 5 --connect-timeout 30 --max-time 600 \
             -o bundle/models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2 \
@@ -42,7 +47,7 @@ jobs:
       - name: Upload bundle
         uses: actions/upload-artifact@v4
         with:
-          name: sherpa-diarization-acoustic-bundle
+          name: sherpa-diarization-acoustic-bundle-py311
           path: bundle/
           compression-level: 0
           retention-days: 7
