@@ -1,0 +1,47 @@
+name: Temporary FunASR Dependencies R13
+
+on:
+  push:
+    paths:
+      - '.github/workflows/temp-funasr-deps-r13.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Download Python 3.13 compatible inference wheels
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p wheels
+          pkgs=(
+            kaldiio torch_complex omegaconf hydra-core antlr4-python3-runtime
+            jieba jamo jaconv rapidfuzz tensorboardX protobuf
+            oss2 crcmod pycryptodome aliyun-python-sdk-core aliyun-python-sdk-kms jmespath
+            tiktoken transformers tokenizers modelscope
+          )
+          for p in "${pkgs[@]}"; do
+            echo "Downloading $p"
+            python -m pip download --dest wheels --no-deps \
+              --python-version 313 --implementation cp \
+              --platform manylinux_2_17_x86_64 --abi cp313 \
+              --only-binary=:all: "$p" \
+            || python -m pip download --dest wheels --no-deps --only-binary=:all: "$p"
+          done
+          find wheels -type f -printf '%f\t%s bytes\n' | sort
+          sha256sum wheels/* > SHA256SUMS.txt
+      - name: Upload dependency wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: funasr-r13-deps-py313
+          path: |
+            wheels/
+            SHA256SUMS.txt
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
