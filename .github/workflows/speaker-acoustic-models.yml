@@ -1,0 +1,62 @@
+name: Speaker Acoustic Models
+
+on:
+  push:
+    branches:
+      - speaker-model-eval-20261026
+    paths:
+      - .github/workflows/speaker-acoustic-models.yml
+
+permissions:
+  contents: read
+
+jobs:
+  package-models:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Prepare model and wheel directories
+        run: |
+          set -euxo pipefail
+          mkdir -p bundle/models bundle/wheels
+
+      - name: Download speaker segmentation and Chinese speaker embeddings
+        run: |
+          set -euxo pipefail
+          curl -fL --retry 5 --retry-delay 2 \
+            -o bundle/models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2 \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2
+          curl -fL --retry 5 --retry-delay 2 \
+            -o bundle/models/3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx
+          curl -fL --retry 5 --retry-delay 2 \
+            -o bundle/models/wespeaker-voxceleb-resnet34-LM.onnx \
+            https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34-LM/resolve/f0c48c298fd835726c27956a5d617bad7115627e/voxceleb_resnet34_LM.onnx
+          tar -xjf bundle/models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2 -C bundle/models
+          rm bundle/models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2
+
+      - name: Download offline Python runtime wheels
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip download --only-binary=:all: --dest bundle/wheels \
+            sherpa-onnx onnxruntime kaldi-native-fbank soundfile
+
+      - name: Record checksums and provenance
+        run: |
+          set -euxo pipefail
+          cat > bundle/PROVENANCE.txt <<'EOF'
+          Speaker segmentation: k2-fsa/sherpa-onnx release speaker-segmentation-models, pyannote segmentation-3.0 ONNX export.
+          Chinese speaker embedding: 3D-Speaker CAMPPlus zh-cn common, k2-fsa/sherpa-onnx release speaker-recongition-models.
+          Independent cross-check embedding: WeSpeaker VoxCeleb ResNet34-LM ONNX, pinned revision f0c48c298fd835726c27956a5d617bad7115627e.
+          Runtime: wheels downloaded from PyPI for CPython 3.11 Linux x86_64 on ubuntu-24.04.
+          EOF
+          (cd bundle && find . -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt)
+          du -ah bundle | sort -h | tail -30
+
+      - name: Upload offline bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: classroom-speaker-acoustic-models-linux-x86_64
+          path: bundle
+          compression-level: 0
+          retention-days: 3
