@@ -1,0 +1,109 @@
+name: Temporary Sherpa ONNX Diarization Bundle
+
+on:
+  push:
+    paths:
+      - '.github/workflows/temp-sherpa-diarization-bundle-20261026.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Download sherpa-onnx wheel and diarization models
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p bundle/wheels bundle/models
+          python -m pip install --upgrade pip
+          python -m pip download --only-binary=:all: --no-deps --dest bundle/wheels sherpa-onnx==2.0.1
+          wget -q --show-progress -O bundle/models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2 \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2
+          tar -xjf bundle/models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2 -C bundle/models
+          wget -q --show-progress -O bundle/models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx
+          wget -q --show-progress -O bundle/models/0-four-speakers-zh.wav \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/0-four-speakers-zh.wav
+          sha256sum bundle/wheels/* bundle/models/*.onnx bundle/models/*.tar.bz2 > bundle/SHA256SUMS.txt
+
+      - name: Install and validate offline diarization
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m pip install --no-index --find-links bundle/wheels sherpa-onnx==2.0.1
+          python - <<'PY'
+          import wave
+          import numpy as np
+          import sherpa_onnx
+
+          seg = 'bundle/models/sherpa-onnx-pyannote-segmentation-3-0/model.onnx'
+          emb = 'bundle/models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx'
+          wav = 'bundle/models/0-four-speakers-zh.wav'
+          config = sherpa_onnx.OfflineSpeakerDiarizationConfig(
+              segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
+                  pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(
+                      model=seg,
+                      window_shift_ratio=0.1,
+                  ),
+                  num_threads=2,
+                  debug=False,
+                  provider='cpu',
+              ),
+              embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(
+                  model=emb,
+                  num_threads=2,
+                  debug=False,
+                  provider='cpu',
+              ),
+              clustering=sherpa_onnx.FastClusteringConfig(
+                  num_clusters=4,
+                  threshold=0.5,
+              ),
+              min_duration_on=0.15,
+              min_duration_off=0.10,
+          )
+          if not config.validate():
+              raise RuntimeError(config)
+          sd = sherpa_onnx.OfflineSpeakerDiarization(config)
+          with wave.open(wav, 'rb') as f:
+              assert f.getnchannels() == 1
+              assert f.getsampwidth() == 2
+              sr = f.getframerate()
+              samples = np.frombuffer(f.readframes(f.getnframes()), dtype=np.int16).astype(np.float32) / 32768.0
+          assert sr == sd.sample_rate
+          segments = sd.process(samples.tolist())
+          assert len(segments) > 0
+          speakers = sorted(set(int(s.speaker) for s in segments))
+          print({'segments': len(segments), 'speakers': speakers, 'sample_rate': sr})
+          PY
+
+      - name: Add usage script and metadata
+        shell: bash
+        run: |
+          cat > bundle/README.txt <<'EOF'
+          Offline speaker diarization bundle for Linux x86_64 / Python 3.13.
+          Components: sherpa-onnx 2.0.1 wheel, pyannote segmentation 3.0 ONNX,
+          Chinese ERes2Net speaker embedding model, and a four-speaker Chinese test WAV.
+          Use num_clusters=7 for one teacher plus six students. The diarizer may output
+          overlapping time segments. Map anonymous clusters to T/S1-S6 using known
+          point-name/role anchors and textual turn evidence; do not identify clusters
+          by model output alone.
+          EOF
+          find bundle -type f -printf '%P\t%s\n' | sort > bundle/FILELIST.txt
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: sherpa-onnx-diarization-py313-linux-x64
+          path: bundle
+          compression-level: 0
+          retention-days: 2
