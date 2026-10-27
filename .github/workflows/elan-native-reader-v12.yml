@@ -1,0 +1,30 @@
+name: ELAN Native Reader V12
+on:
+  push:
+    branches: ['tools/elan-independent-asr-v12-20261026']
+    paths: ['.github/workflows/elan-native-reader-v12.yml']
+permissions:
+  contents: read
+jobs:
+  reader:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 8
+    steps:
+      - name: Fetch official release without classroom data
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p unpack reader
+          curl --connect-timeout 20 --max-time 180 -L --fail --retry 1 https://www.mpi.nl/tools/elan/ELAN_7-1_linux.tar.gz -o elan.tar.gz
+          sha256sum elan.tar.gz > reader/RELEASE_SHA256.txt
+          tar -xzf elan.tar.gz -C unpack
+          find unpack -type f -name '*.jar' -exec cp -t reader {} +
+          test -n "$(find reader -name '*.jar' -print -quit)"
+          printf '%s\n' 'Official MPI ELAN 7.1 libraries; no classroom files were uploaded.' > reader/README.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: elan-v12-native-reader
+          path: reader
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
