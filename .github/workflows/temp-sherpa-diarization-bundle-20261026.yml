@@ -41,8 +41,8 @@ jobs:
           set -euxo pipefail
           python -m pip install --no-index --find-links bundle/wheels sherpa-onnx==2.0.1
           python - <<'PY'
+          import array
           import wave
-          import numpy as np
           import sherpa_onnx
 
           seg = 'bundle/models/sherpa-onnx-pyannote-segmentation-3-0/model.onnx'
@@ -78,9 +78,11 @@ jobs:
               assert f.getnchannels() == 1
               assert f.getsampwidth() == 2
               sr = f.getframerate()
-              samples = np.frombuffer(f.readframes(f.getnframes()), dtype=np.int16).astype(np.float32) / 32768.0
+              raw = array.array('h')
+              raw.frombytes(f.readframes(f.getnframes()))
+          samples = [x / 32768.0 for x in raw]
           assert sr == sd.sample_rate
-          segments = sd.process(samples.tolist())
+          segments = sd.process(samples)
           assert len(segments) > 0
           speakers = sorted(set(int(s.speaker) for s in segments))
           print({'segments': len(segments), 'speakers': speakers, 'sample_rate': sr})
