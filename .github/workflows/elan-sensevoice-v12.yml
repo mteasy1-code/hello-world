@@ -1,0 +1,54 @@
+name: ELAN Independent SenseVoice V12
+on:
+  push:
+    branches: ['tools/elan-independent-asr-v12-20261026']
+    paths: ['.github/workflows/elan-sensevoice-v12.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bundle:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download public inference weights only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p model wheels
+          base=https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main
+          curl -L --fail --retry 3 "$base/model.int8.onnx" -o model/model.int8.onnx
+          echo 'c71f0ce00bec95b07744e116345e33d8cbbe08cef896382cf907bf4b51a2cd51  model/model.int8.onnx' | sha256sum -c -
+          curl -L --fail --retry 3 "$base/tokens.txt" -o model/tokens.txt
+          python -m pip download --only-binary=:all: sherpa-onnx==1.13.7 -d wheels
+          (cd model && sha256sum model.int8.onnx tokens.txt > SHA256SUMS)
+          (cd wheels && sha256sum *.whl > SHA256SUMS)
+          printf '%s\n' 'Public SenseVoiceSmall ONNX conversion; local inference only. No classroom media is uploaded to this workflow.' > model/README.txt
+      - name: Validate loading
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --no-index --find-links wheels sherpa-onnx==1.13.7
+          python - <<'PY'
+          import sherpa_onnx
+          r=sherpa_onnx.OfflineRecognizer.from_sense_voice(model='model/model.int8.onnx', tokens='model/tokens.txt', num_threads=2, use_itn=True, language='auto', debug=False)
+          assert r is not None
+          print('MODEL_LOAD_OK')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: elan-v12-sensevoice-model
+          path: model
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: elan-v12-sherpa-wheels
+          path: wheels
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
