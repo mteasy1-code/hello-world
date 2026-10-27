@@ -1,0 +1,70 @@
+name: Temporary Faster Whisper Large V3 Turbo Model Split 240M
+
+on:
+  push:
+    paths:
+      - '.github/workflows/temp-large-v3-turbo-split-20261027.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  split-model:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download and split model
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m pip install --quiet 'huggingface_hub>=0.25,<1'
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          snapshot_download(
+              repo_id='deepdml/faster-whisper-large-v3-turbo-ct2',
+              local_dir='model',
+              local_dir_use_symlinks=False,
+          )
+          PY
+          find model -type f -print0 | sort -z | xargs -0 sha256sum > MODEL_FILES_SHA256SUMS.txt
+          tar -cf model.tar model MODEL_FILES_SHA256SUMS.txt
+          sha256sum model.tar > MODEL_TAR_SHA256SUM.txt
+          split -b 230M -d -a 2 model.tar model.tar.part-
+          sha256sum model.tar.part-* > MODEL_PARTS_SHA256SUMS.txt
+          mkdir -p parts
+          for p in model.tar.part-*; do
+            n=${p##*-}
+            mkdir -p "parts/$n"
+            cp "$p" "parts/$n/"
+            cp MODEL_PARTS_SHA256SUMS.txt MODEL_TAR_SHA256SUM.txt "parts/$n/"
+          done
+          ls -lh model.tar.part-*
+      - name: Upload part 00
+        uses: actions/upload-artifact@v4
+        with: {name: large-v3-turbo-240m-part-00, path: parts/00, compression-level: 0, retention-days: 2}
+      - name: Upload part 01
+        uses: actions/upload-artifact@v4
+        with: {name: large-v3-turbo-240m-part-01, path: parts/01, compression-level: 0, retention-days: 2}
+      - name: Upload part 02
+        uses: actions/upload-artifact@v4
+        with: {name: large-v3-turbo-240m-part-02, path: parts/02, compression-level: 0, retention-days: 2}
+      - name: Upload part 03
+        uses: actions/upload-artifact@v4
+        with: {name: large-v3-turbo-240m-part-03, path: parts/03, compression-level: 0, retention-days: 2}
+      - name: Upload part 04
+        uses: actions/upload-artifact@v4
+        with: {name: large-v3-turbo-240m-part-04, path: parts/04, compression-level: 0, retention-days: 2}
+      - name: Upload part 05
+        uses: actions/upload-artifact@v4
+        with: {name: large-v3-turbo-240m-part-05, path: parts/05, compression-level: 0, retention-days: 2}
+      - name: Upload part 06
+        uses: actions/upload-artifact@v4
+        with: {name: large-v3-turbo-240m-part-06, path: parts/06, compression-level: 0, retention-days: 2}
+      - name: Upload part 07
+        if: hashFiles('parts/07/model.tar.part-07') != ''
+        uses: actions/upload-artifact@v4
+        with: {name: large-v3-turbo-240m-part-07, path: parts/07, compression-level: 0, retention-days: 2}
