@@ -19,13 +19,13 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Download sherpa-onnx wheel and diarization models
+      - name: Download sherpa-onnx wheels and diarization models
         shell: bash
         run: |
           set -euxo pipefail
           mkdir -p bundle/wheels bundle/models
           python -m pip install --upgrade pip
-          python -m pip download --only-binary=:all: --no-deps --dest bundle/wheels sherpa-onnx==2.0.1
+          python -m pip download --only-binary=:all: --dest bundle/wheels sherpa-onnx==2.0.1
           wget -q --show-progress -O bundle/models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2 \
             https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2
           tar -xjf bundle/models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2 -C bundle/models
@@ -86,17 +86,17 @@ jobs:
           print({'segments': len(segments), 'speakers': speakers, 'sample_rate': sr})
           PY
 
-      - name: Add usage script and metadata
+      - name: Add usage metadata
         shell: bash
         run: |
           cat > bundle/README.txt <<'EOF'
           Offline speaker diarization bundle for Linux x86_64 / Python 3.13.
-          Components: sherpa-onnx 2.0.1 wheel, pyannote segmentation 3.0 ONNX,
-          Chinese ERes2Net speaker embedding model, and a four-speaker Chinese test WAV.
-          Use num_clusters=7 for one teacher plus six students. The diarizer may output
-          overlapping time segments. Map anonymous clusters to T/S1-S6 using known
-          point-name/role anchors and textual turn evidence; do not identify clusters
-          by model output alone.
+          Components: sherpa-onnx 2.0.1 and dependency wheels, pyannote segmentation
+          3.0 ONNX, Chinese ERes2Net speaker embedding model, and a four-speaker Chinese
+          test WAV. Use num_clusters=7 for one teacher plus six students. The diarizer
+          can output overlapping time segments. Map anonymous clusters to T/S1-S6 using
+          known point-name/role anchors and textual turn evidence; do not identify
+          clusters by model output alone.
           EOF
           find bundle -type f -printf '%P\t%s\n' | sort > bundle/FILELIST.txt
 
