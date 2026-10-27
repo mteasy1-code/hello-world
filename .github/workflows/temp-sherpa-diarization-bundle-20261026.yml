@@ -82,8 +82,9 @@ jobs:
               raw.frombytes(f.readframes(f.getnframes()))
           samples = [x / 32768.0 for x in raw]
           assert sr == sd.sample_rate
-          segments = sd.process(samples)
-          assert len(segments) > 0
+          result = sd.process(samples).sort_by_start_time()
+          segments = list(result)
+          assert segments
           speakers = sorted(set(int(s.speaker) for s in segments))
           print({'segments': len(segments), 'speakers': speakers, 'sample_rate': sr})
           PY
